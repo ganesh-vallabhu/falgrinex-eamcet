@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function claimMap() {
+      return signedIn() ? request.auth.token : {};
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        claimMap().get('admin', false) == true ||
+        claimMap().get('admin', false) == 1 ||
+        claimMap().get('isAdmin', false) == true
+      );
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /students/{uid} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isOwner(uid) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'totalScore',
+          'testsTaken',
+          'accuracySum',
+          'streak',
+          'lastActiveDate',
+          'weakTopics',
+          'testBestScores',
+          'subjectTotals',
+          'updatedAt'
+        ])
+      );
+    }
+
+    match /results/{resultId} {
+      allow read: if isOwner(resource.data.uid) || isAdmin();
+      allow create: if isOwner(request.resource.data.uid)
+        && request.resource.data.verification == 'unverified-client'
+        && request.resource.data.keys().hasAll(['uid', 'studentId', 'score', 'title', 'attemptId']);
+      allow update, delete: if isAdmin();
+    }
+
+    match /quizAttempts/{id} {
+      allow read: if isOwner(resource.data.uid) || isAdmin();
+      allow create: if isOwner(request.resource.data.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /weeklyStats/{id} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(request.resource.data.uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /usernameLookup/{key} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /resources/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /dailyChallenges/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /settings/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

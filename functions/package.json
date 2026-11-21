@@ -1,0 +1,16 @@
+{
+  "name": "eamcet-security-functions",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "scripts": {
+    "grant-admin": "node grant-admin.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.3.2"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "falgrinex-eamcet-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "vitest run",
+    "extract:questions": "node scripts/extract-questions.mjs",
+    "test:rules": "node scripts/test-rules.mjs",
+    "check:data": "node scripts/verify-data.mjs"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.0",
+    "firebase": "^12.19.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.20",
+    "firebase-tools": "^14.9.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.1.0",
+    "vitest": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.6": true,
+    "re2@1.27.2": true
+  }
+}
