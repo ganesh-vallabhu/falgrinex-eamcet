@@ -86,7 +86,7 @@ export default function Landing() {
           <div className="relative mx-auto w-full max-w-lg">
             <div className="absolute -inset-6 rounded-[2.5rem] bg-gradient-to-tr from-cyan-500/20 via-violet-500/20 to-fuchsia-500/10 blur-3xl" />
             <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-2 shadow-2xl shadow-black/40">
-              <img src="/assets/hero.webp" alt="Falgrinex EAMCET practice dashboard preview" className="h-auto w-full rounded-[1.35rem] object-cover" />
+              <img src="/assets/hero.webp" alt="Falgrinex EAMCET practice dashboard preview" width="960" height="639" fetchPriority="high" className="h-auto w-full rounded-[1.35rem] object-cover" />
             </div>
             <div className="card absolute -bottom-5 -left-3 hidden items-center gap-3 px-4 py-3 sm:flex">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-sm font-bold text-emerald-300">94</span>

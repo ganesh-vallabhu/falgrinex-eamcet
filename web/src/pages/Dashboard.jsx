@@ -47,7 +47,7 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => subscribeAnnouncements(
-    (rows) => setAnnouncements(Array.isArray(rows) ? rows : []),
+    (rows) => { setAnnouncements(Array.isArray(rows) ? rows : []); setAnnouncementError(''); },
     () => setAnnouncementError('Announcements are unavailable right now.'),
   ), []);
 

@@ -6,7 +6,16 @@ import { errorMessage } from '../lib/errors.js';
 import { loadCatalog } from '../lib/questionBank.js';
 import { subscribeMockLocks } from '../lib/repository.js';
 
-function isMockLocked(locks, title) {
+function entryLocked(value, now) {
+  const locked = value === true || value === 1 || value?.locked === true || value?.locked === 1;
+  if (!locked) return false;
+  const rawUnlock = value?.unlockAt?.toDate ? value.unlockAt.toDate() : value?.unlockAt;
+  if (rawUnlock === null || rawUnlock === undefined || rawUnlock === '') return true;
+  const unlockAt = rawUnlock instanceof Date ? rawUnlock.getTime() : typeof rawUnlock === 'number' ? rawUnlock : Date.parse(rawUnlock);
+  return !Number.isFinite(unlockAt) || unlockAt > now;
+}
+
+function isMockLocked(locks, title, now = Date.now()) {
   if (!locks) return false;
   if (Array.isArray(locks)) return locks.includes(title);
   if (Array.isArray(locks.locked)) return locks.locked.includes(title);
@@ -21,7 +30,7 @@ function isMockLocked(locks, title) {
     number && locks.locked?.[number],
     number && locks.mock?.[number],
   ];
-  return values.some((value) => value === true || value === 1 || value?.locked === true || value?.locked === 1);
+  return values.some((value) => entryLocked(value, now));
 }
 
 function TestCard({ test, bank, locked }) {
@@ -58,6 +67,7 @@ export default function Tests() {
   const [error, setError] = useState('');
   const [locks, setLocks] = useState({});
   const [lockError, setLockError] = useState('');
+  const [locksReady, setLocksReady] = useState(false);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -70,8 +80,8 @@ export default function Tests() {
   }, [reload]);
 
   useEffect(() => subscribeMockLocks(
-    (data) => { setLocks(data || {}); setLockError(''); },
-    () => setLockError('Mock test locks could not be loaded. Locked tests may appear open.'),
+    (data) => { setLocks(data || {}); setLockError(''); setLocksReady(true); },
+    () => { setLockError('Mock test locks could not be loaded. Tests are shown as locked until they can be checked.'); setLocksReady(true); },
   ), []);
 
   if (!catalog && !error) return <PageLoader label="Loading tests" />;
@@ -109,7 +119,7 @@ export default function Tests() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {mocks.map((test) => (
-                <TestCard key={test.title} test={test} bank="mock" locked={isMockLocked(locks, test.title)} />
+                <TestCard key={test.title} test={test} bank="mock" locked={!locksReady || Boolean(lockError) || isMockLocked(locks, test.title)} />
               ))}
             </div>
           </section>

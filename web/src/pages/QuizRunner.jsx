@@ -10,6 +10,7 @@ import {
   loadTestQuestions,
   normalizeSubject,
   practiceTitle,
+  questionId,
   selectPracticeQuestions,
   testById,
 } from '../lib/questionBank.js';
@@ -42,6 +43,13 @@ function readSession(key) {
 function fitArray(value, length, fill) {
   const source = Array.isArray(value) ? value : [];
   return Array.from({ length }, (_, index) => source[index] ?? fill);
+}
+
+function restoreQuestionOrder(questions, ids) {
+  if (!Array.isArray(ids) || ids.length !== questions.length) return questions;
+  const byId = new Map(questions.map((question) => [questionId('P', question), question]));
+  const ordered = ids.map((id) => byId.get(id));
+  return ordered.every(Boolean) ? ordered : questions;
 }
 
 function formatTime(value) {
@@ -86,7 +94,8 @@ export default function QuizRunner({ mode = 'practice' }) {
     retryTo: '/app',
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -105,10 +114,11 @@ export default function QuizRunner({ mode = 'practice' }) {
 
     async function prepare() {
       setLoading(true);
-      setError('');
+      setLoadError('');
+      setSubmitError('');
       try {
         if (!user?.uid) {
-          setError('Your session is not ready. Please sign in again.');
+          setLoadError('Your session is not ready. Please sign in again.');
           return;
         }
         if (mode === 'practice') {
@@ -117,15 +127,16 @@ export default function QuizRunner({ mode = 'practice' }) {
           if (!pool.length && normalized !== 'Other' && normalized !== decodedSubject) {
             pool = await loadPracticeChapter(normalized, decodedChapter);
           }
-          const selected = selectPracticeQuestions(pool, decodedDifficulty);
+          const shuffled = selectPracticeQuestions(pool, decodedDifficulty);
+          const selected = restoreQuestionOrder(shuffled, restored?.questionIds);
           if (!selected.length) {
-            setError('No questions are available for this chapter and difficulty.');
+            setLoadError('No questions are available for this chapter and difficulty.');
             return;
           }
           if (!active) return;
           setQuestions(selected);
           setMeta({
-            title: practiceTitle(decodedChapter, decodedDifficulty),
+            title: practiceTitle(decodedChapter, decodedDifficulty, normalized),
             bank: 'P',
             negativeMarking: false,
             durationSec: 0,
@@ -138,10 +149,15 @@ export default function QuizRunner({ mode = 'practice' }) {
           return;
         }
         if (mode === 'test' && decodedBank === 'daily') {
-          const stored = await getDailyChallenge(dateKey);
+          let stored = null;
+          try {
+            stored = await getDailyChallenge(dateKey);
+          } catch {
+            stored = null;
+          }
           const source = stored || await getAutoDailyChallenge(dateKey);
           if (!source?.question) {
-            setError('Today’s challenge is not available yet.');
+            setLoadError('Today’s challenge is not available yet.');
             return;
           }
           const item = {
@@ -163,20 +179,20 @@ export default function QuizRunner({ mode = 'practice' }) {
             subject: 'Daily Challenge',
             retryTo: `/app/test/daily/${encodeURIComponent('Daily Challenge')}`,
           });
-          setAnswers([null]);
-          setBookmarks([false]);
+          setAnswers((value) => fitArray(value, 1, null));
+          setBookmarks((value) => fitArray(value, 1, false));
           setIndex(0);
           return;
         }
         if (mode === 'test') {
           const test = testById(decodedTitle);
           if (!test) {
-            setError('We could not find that test.');
+            setLoadError('We could not find that test.');
             return;
           }
           const loaded = await loadTestQuestions(test);
           if (!loaded.length) {
-            setError('This test has no questions available.');
+            setLoadError('This test has no questions available.');
             return;
           }
           const durationSec = Number(test.durationSec) > 0
@@ -200,9 +216,9 @@ export default function QuizRunner({ mode = 'practice' }) {
           setIndex((value) => Math.min(Math.max(0, value), loaded.length - 1));
           return;
         }
-        setError('Unknown quiz mode.');
+        setLoadError('Unknown quiz mode.');
       } catch (caught) {
-        if (active) setError(errorMessage(caught, 'Could not load this quiz.'));
+        if (active) setLoadError(errorMessage(caught, 'Could not load this quiz.'));
       } finally {
         if (active) setLoading(false);
       }
@@ -218,7 +234,8 @@ export default function QuizRunner({ mode = 'practice' }) {
       if (submittedRef.current) return;
       setNow(Date.now());
       if (isCountdown) {
-        setClock((value) => Math.max(0, (value === null || !Number.isFinite(value) ? meta.durationSec : value) - 1));
+        const used = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+        setClock(Math.max(0, meta.durationSec - used));
       }
     }, 1000);
     return () => clearInterval(timer);
@@ -231,14 +248,15 @@ export default function QuizRunner({ mode = 'practice' }) {
         answers: fitArray(answers, questions.length, null),
         bookmarks: fitArray(bookmarks, questions.length, false),
         index,
-        secondsLeft: isCountdown ? remaining : null,
+        secondsLeft: isCountdown ? Math.max(0, meta.durationSec - Math.max(0, Math.floor((Date.now() - startedAt) / 1000))) : null,
+        questionIds: meta.bank === 'P' ? questions.map((question) => questionId('P', question)) : undefined,
         attemptId,
         startedAt,
       }));
     } catch {
       return;
     }
-  }, [storageKey, questions.length, answers, bookmarks, index, remaining, isCountdown, attemptId, startedAt]);
+  }, [storageKey, questions.length, answers, bookmarks, index, isCountdown, meta.bank, meta.durationSec, attemptId, startedAt]);
 
   function chooseOption(optionIndex) {
     setAnswers((value) => {
@@ -269,7 +287,7 @@ export default function QuizRunner({ mode = 'practice' }) {
     submittingRef.current = true;
     setSubmitting(true);
     setConfirmOpen(false);
-    setError('');
+    setSubmitError('');
     const activeAnswers = fitArray(answers, questions.length, null);
     const usedSeconds = isCountdown
       ? Math.max(0, meta.durationSec - remaining)
@@ -308,7 +326,7 @@ export default function QuizRunner({ mode = 'practice' }) {
     } catch (caught) {
       submittingRef.current = false;
       setSubmitting(false);
-      setError(errorMessage(caught, 'Could not save your result. Please try again.'));
+      setSubmitError(errorMessage(caught, 'Could not save your result. Please try again.'));
     }
   }
 
@@ -320,11 +338,11 @@ export default function QuizRunner({ mode = 'practice' }) {
   }, [isCountdown, questions.length, loading, displaySeconds]);
 
   if (loading) return <PageLoader label="Loading quiz" />;
-  if (error || !questions.length) {
+  if (loadError || !questions.length) {
     return (
       <ErrorState
-        title={error ? 'Quiz unavailable' : 'No questions found'}
-        message={error || 'This quiz has no questions to display.'}
+        title={loadError ? 'Quiz unavailable' : 'No questions found'}
+        message={loadError || 'This quiz has no questions to display.'}
         onRetry={() => setReloadToken((value) => value + 1)}
       />
     );
@@ -395,7 +413,7 @@ export default function QuizRunner({ mode = 'practice' }) {
             ))}
           </div>
 
-          {error && <p className="mt-4 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">{error}</p>}
+          {submitError && <p className="mt-4 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">{submitError}</p>}
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
             <button type="button" className="btn-ghost" onClick={() => goTo(index - 1)} disabled={index === 0}>Previous</button>

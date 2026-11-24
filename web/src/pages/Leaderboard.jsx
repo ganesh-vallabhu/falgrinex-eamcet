@@ -26,8 +26,8 @@ function testsOf(row, tab) {
 }
 
 function accuracyOf(row, tab) {
-  if (tab === 'week') return row.accuracy == null ? null : Number(row.accuracy);
-  const tests = Number(row.testsTaken || 0);
+  const tests = testsOf(row, tab);
+  if (tab === 'week' && row.accuracy != null) return Number(row.accuracy);
   return tests ? Math.round((Number(row.accuracySum || 0) / tests) * 10) / 10 : 0;
 }
 
@@ -44,8 +44,9 @@ export default function Leaderboard() {
     setLoading(true);
     setError('');
     const weekly = tab === 'week';
-    const key = weekly ? `week:${weekStartKey()}` : 'overall';
-    const loader = weekly ? () => getWeeklyLeaderboard(weekStartKey()) : () => listTopStudents();
+    const week = weekStartKey();
+    const key = weekly ? `week:${week}` : 'overall';
+    const loader = weekly ? () => getWeeklyLeaderboard(week) : () => listTopStudents();
     cachedLeaderboard(key, user?.uid, loader)
       .then((data) => { if (active) setRows(Array.isArray(data) ? data : []); })
       .catch((caught) => { if (active) setError(errorMessage(caught, 'Could not load the leaderboard.')); })

@@ -6,10 +6,17 @@ export function memoize(key, ttlMs, producer) {
   if (hit && hit.expires > now) return hit.value;
   const value = producer();
   if (value && typeof value.then === 'function') {
-    const pending = value.finally(() => {
-      const current = memory.get(key);
-      if (current?.value === pending) memory.set(key, { value, expires: now + ttlMs });
-    });
+    const pending = value.then(
+      (resolved) => {
+        const current = memory.get(key);
+        if (current?.value === pending) memory.set(key, { value: resolved, expires: Date.now() + ttlMs });
+        return resolved;
+      },
+      (error) => {
+        if (memory.get(key)?.value === pending) memory.delete(key);
+        throw error;
+      },
+    );
     memory.set(key, { value: pending, expires: now + ttlMs });
     return pending;
   }
@@ -69,11 +76,11 @@ export async function cachedJson(url, cacheKey, { ttlMs = 300_000 } = {}) {
   const key = `json:${cacheKey}`;
   const hit = memoize(key, ttlMs, async () => {
     const stored = await readStore(cacheKey);
-    if (stored) return stored;
+    if (stored && stored.expires > Date.now()) return stored.value;
     const response = await fetch(url, { cache: 'force-cache' });
     if (!response.ok) throw new Error(`Failed to load ${url} (${response.status})`);
     const value = await response.json();
-    await writeStore(cacheKey, value);
+    await writeStore(cacheKey, { value, expires: Date.now() + ttlMs });
     return value;
   });
   return hit;

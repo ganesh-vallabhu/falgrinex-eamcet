@@ -153,7 +153,7 @@ export default function AppShell() {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label="Primary navigation">
-        <div className="mx-auto grid max-w-2xl grid-cols-6">
+        <div className={`mx-auto grid max-w-2xl ${isAdmin ? 'grid-cols-7' : 'grid-cols-6'}`}>
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -165,6 +165,15 @@ export default function AppShell() {
               <span className="truncate">{item.short}</span>
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/app/admin"
+              className={({ isActive }) => `flex flex-col items-center gap-1 px-0.5 py-2.5 text-[10px] font-semibold transition ${isActive ? 'text-violet-300' : 'text-slate-400'}`}
+            >
+              <Icon paths={['M12 3l8 3v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z', 'M9 12l2 2 4-4']} className="h-5 w-5" />
+              <span className="truncate">Admin</span>
+            </NavLink>
+          )}
         </div>
       </nav>
     </div>

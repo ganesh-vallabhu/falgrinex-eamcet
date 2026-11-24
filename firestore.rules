@@ -35,13 +35,15 @@ service cloud.firestore {
           'weakTopics',
           'testBestScores',
           'subjectTotals',
+          'setupLinkSent',
+          'pendingVerification',
           'updatedAt'
         ])
       );
     }
 
     match /results/{resultId} {
-      allow read: if isOwner(resource.data.uid) || isAdmin();
+      allow read: if signedIn();
       allow create: if isOwner(request.resource.data.uid)
         && request.resource.data.verification == 'unverified-client'
         && request.resource.data.keys().hasAll(['uid', 'studentId', 'score', 'title', 'attemptId']);
@@ -61,7 +63,8 @@ service cloud.firestore {
     }
 
     match /usernameLookup/{key} {
-      allow read: if signedIn();
+      allow get: if true;
+      allow list: if false;
       allow create, update, delete: if isAdmin();
     }
 

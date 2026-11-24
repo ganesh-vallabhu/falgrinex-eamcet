@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const webDir = path.resolve(scriptDir, '..');
 const root = path.resolve(webDir, '..');
-const htmlFile = path.join(root, 'index.html');
+const htmlFile = path.join(root, 'public', 'index.html');
 const catalogFile = path.join(webDir, 'src', 'data', 'catalog.generated.json');
 const questionDir = path.join(webDir, 'public', 'questions');
 const expectedTotals = { practice: 7067, mock: 16000, grand: 1600 };

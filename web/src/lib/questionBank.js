@@ -18,8 +18,12 @@ export function questionId(bank, question) {
     .join('|');
 }
 
-export function practiceTitle(chapter, difficulty) {
-  return `${chapter} · ${difficulty}`;
+export function practiceTitle(chapter, difficulty, subject) {
+  if (!subject) return `${chapter} · ${difficulty}`;
+  const owner = normalizeSubject(subject);
+  const owners = SUBJECTS.filter((item) => catalog.practice.some((entry) => entry.subject === item && entry.chapter === chapter));
+  const suffix = owners.length > 1 && owner !== owners[0] ? ` (${owner})` : '';
+  return `${chapter}${suffix} · ${difficulty}`;
 }
 
 export async function loadCatalog() {
@@ -76,8 +80,8 @@ export async function getAutoDailyChallenge(dateKey) {
   return questions[dayNumber % questions.length];
 }
 
-export function chapterStatsFor(profile, chapter, difficulty) {
-  const record = profile?.testBestScores?.[practiceTitle(chapter, difficulty)];
+export function chapterStatsFor(profile, chapter, difficulty, subject) {
+  const record = profile?.testBestScores?.[practiceTitle(chapter, difficulty, subject)];
   return {
     best: record?.score ?? null,
     attempts: record?.attempts ?? 0,

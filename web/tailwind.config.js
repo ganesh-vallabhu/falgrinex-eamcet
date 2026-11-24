@@ -8,10 +8,6 @@ export default {
       },
       colors: {
         ink: '#12172b',
-        cyan: '#0891b2',
-        violet: '#7c3aed',
-        pink: '#db2777',
-        amber: '#b45309',
         success: '#059669',
         danger: '#dc2626',
       },

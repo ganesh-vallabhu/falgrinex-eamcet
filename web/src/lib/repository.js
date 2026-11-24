@@ -1,6 +1,7 @@
 import { deleteApp, initializeApp } from 'firebase/app';
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   getAuth,
   sendPasswordResetEmail,
   signOut,
@@ -97,10 +98,10 @@ export async function listTopStudents() {
 
 export async function getWeeklyLeaderboard(weekStart = weekStartKey()) {
   try {
-    const snapshot = await withRetry(() => getDocs(query(collection(db, 'weeklyStats'), orderBy('score', 'desc'), limit(WEEKLY_SCAN_LIMIT))));
+    const snapshot = await withRetry(() => getDocs(query(collection(db, 'weeklyStats'), where('weekStart', '==', weekStart), limit(WEEKLY_SCAN_LIMIT))));
     const rows = snapshot.docs
       .map((item) => ({ id: item.id, ...item.data() }))
-      .filter((row) => row.weekStart === weekStart)
+      .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
       .slice(0, LEADERBOARD_LIMIT)
       .map((row, index) => ({ ...row, rank: index + 1 }));
     if (rows.length) return rows;
@@ -117,14 +118,26 @@ export async function getWeeklyLeaderboard(weekStart = weekStartKey()) {
   for (const item of [...byTimestamp.docs, ...byMillis.docs]) byId.set(item.id, item.data());
   const totals = new Map();
   for (const data of byId.values()) {
-    const key = data.username || data.studentId || data.uid;
-    const current = totals.get(key) || { name: data.studentName || data.name || 'Student', score: 0, tests: 0 };
+    const key = data.studentId || data.uid || data.username || 'unknown';
+    const current = totals.get(key) || {
+      name: data.studentName || data.name || 'Student',
+      username: data.username || '',
+      score: 0,
+      tests: 0,
+      accuracySum: 0,
+    };
     current.score += Number(data.score) || 0;
     current.tests += 1;
+    current.accuracySum += Number(data.accuracy) || 0;
     totals.set(key, current);
   }
   return [...totals.entries()]
-    .map(([id, value]) => ({ id, ...value }))
+    .map(([id, value]) => ({
+      id,
+      studentId: id,
+      ...value,
+      accuracy: value.tests ? Math.round((value.accuracySum / value.tests) * 10) / 10 : 0,
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, LEADERBOARD_LIMIT)
     .map((row, index) => ({ ...row, rank: index + 1 }));
@@ -138,16 +151,17 @@ export async function saveQuizAttempt({ uid, profile, result, attemptId, weekSta
   const weekRef = doc(db, 'weeklyStats', `${uid}_${weekStart}`);
   const today = todayKey();
   const title = result.title;
-  const previousBest = Number(profile?.testBestScores?.[title]?.score ?? 0);
-  const previousRecord = profile?.testBestScores?.[title] || {};
-  const isNewHigh = Number(result.score) > previousBest;
-  const attempts = Number(previousRecord.attempts || 0) + 1;
+  const previousRecord = profile?.testBestScores?.[title] || null;
+  const score = Math.max(0, Number(result.score) || 0);
+  const previousBest = Math.max(0, Number(previousRecord?.score ?? 0));
+  const isNewHigh = !previousRecord || score > previousBest;
+  const attempts = Number(previousRecord?.attempts || 0) + 1;
   const bestRecord = isNewHigh
-    ? { ...previousRecord, score: result.score, accuracy: result.accuracy, total: result.total, attempts, updatedAt: Date.now() }
-    : { ...previousRecord, attempts, lastAttemptAt: Date.now() };
+    ? { ...previousRecord, score, accuracy: result.accuracy, total: result.total, attempts, updatedAt: Date.now(), attemptId: id, lastAttemptId: id }
+    : { ...previousRecord, attempts, lastAttemptAt: Date.now(), lastAttemptId: id };
 
   const profileUpdate = {
-    totalScore: increment(Math.max(0, Number(result.score) - previousBest)),
+    totalScore: increment(Math.max(0, score - previousBest)),
     testsTaken: increment(1),
     accuracySum: increment(Number(result.accuracy) || 0),
     streak: nextStreak(profile?.lastActiveDate, today, profile?.streak),
@@ -185,8 +199,9 @@ export async function saveQuizAttempt({ uid, profile, result, attemptId, weekSta
     username: profile?.username || '',
     name: profile?.name || '',
     weekStart,
-    score: increment(Number(result.score) || 0),
+    score: increment(score),
     tests: increment(1),
+    accuracySum: increment(Number(result.accuracy) || 0),
     updatedAt: Date.now(),
   }, { merge: true });
 
@@ -234,7 +249,7 @@ export async function resolveUsername(username) {
 function resetActionSettings() {
   if (typeof location === 'undefined' || !/^https?:$/.test(location.protocol) || location.origin === 'null') return undefined;
   const dir = location.pathname.substring(0, location.pathname.lastIndexOf('/') + 1);
-  return { url: location.origin + dir, handleCodeInApp: true };
+  return { url: `${location.origin}${dir}#/set-password`, handleCodeInApp: true };
 }
 
 export async function sendPasswordReset(email) {
@@ -268,8 +283,9 @@ export async function createStudentAccount({ name, username, email, password, in
 
   const appName = `falgrinex-admin-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const secondary = initializeApp(firebaseConfig, appName);
+  let secondaryAuth;
   try {
-    const secondaryAuth = getAuth(secondary);
+    secondaryAuth = getAuth(secondary);
     if (USE_EMULATORS) {
       const { connectAuthEmulator } = await import('firebase/auth');
       connectAuthEmulator(secondaryAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
@@ -309,6 +325,11 @@ export async function createStudentAccount({ name, username, email, password, in
     await batch.commit();
     invalidate('leaderboard:');
     return uid;
+  } catch (error) {
+    try {
+      if (secondaryAuth?.currentUser) await deleteUser(secondaryAuth.currentUser);
+    } catch {}
+    throw error;
   } finally {
     await deleteApp(secondary);
   }
@@ -317,13 +338,20 @@ export async function createStudentAccount({ name, username, email, password, in
 export async function updateStudentAccount(student, { name, username, institute }) {
   const key = normalizeUsername(username);
   if (!key) throw new Error('Username is required.');
+  const oldKey = normalizeUsername(student.username);
+  if (key !== oldKey) {
+    const taken = await getDoc(doc(db, 'usernameLookup', key));
+    if (taken.exists() && taken.data()?.studentId !== student.id) throw new Error('That username is already taken.');
+  }
   const batch = writeBatch(db);
   batch.update(doc(db, 'students', student.id), { name: name.trim(), username: key, institute: institute || '', updatedAt: Date.now() });
-  if (key !== student.username) {
-    const oldLookup = await getDoc(doc(db, 'usernameLookup', normalizeUsername(student.username)));
-    const payload = { email: student.email, studentId: student.id, name: name.trim() };
-    batch.delete(doc(db, 'usernameLookup', normalizeUsername(student.username)));
+  const payload = { email: student.email, studentId: student.id, name: name.trim() };
+  if (key !== oldKey) {
+    const oldLookup = await getDoc(doc(db, 'usernameLookup', oldKey));
+    batch.delete(doc(db, 'usernameLookup', oldKey));
     batch.set(doc(db, 'usernameLookup', key), oldLookup.exists() ? { ...oldLookup.data(), ...payload } : payload);
+  } else {
+    batch.set(doc(db, 'usernameLookup', key), payload, { merge: true });
   }
   await batch.commit();
   invalidate('leaderboard:');

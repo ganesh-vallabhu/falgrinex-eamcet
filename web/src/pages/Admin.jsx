@@ -39,6 +39,17 @@ function Field({ label, htmlFor, children }) {
   );
 }
 
+function safeResourceLink(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw, typeof window === 'undefined' ? undefined : window.location.href);
+    return ['http:', 'https:'].includes(url.protocol) ? raw : '';
+  } catch {
+    return '';
+  }
+}
+
 function StudentsTab() {
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -406,17 +417,19 @@ function ResourcesTab() {
     event.preventDefault();
     setError('');
     setSuccess('');
-    if (!form.title.trim() || !form.link.trim()) {
-      setError('Title and link are required.');
+    const title = form.title.trim();
+    const link = safeResourceLink(form.link);
+    if (!title || !link) {
+      setError('Title and a valid http(s) or relative link are required.');
       return;
     }
     setBusy(true);
     try {
       if (editingId) {
-        await updateResource(editingId, { title: form.title.trim(), link: form.link.trim() });
+        await updateResource(editingId, { title, link });
         setSuccess('Resource updated.');
       } else {
-        await createResource({ title: form.title.trim(), link: form.link.trim() });
+        await createResource({ title, link });
         setSuccess('Resource added.');
       }
       clearForm();

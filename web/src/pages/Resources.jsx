@@ -6,7 +6,8 @@ import { listResources, subscribeAnnouncements } from '../lib/repository.js';
 
 function safeLink(link) {
   try {
-    const url = new URL(String(link || ''));
+    const base = typeof window === 'undefined' ? undefined : window.location.href;
+    const url = new URL(String(link || '').trim(), base);
     return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
   } catch {
     return '';
@@ -48,7 +49,7 @@ export default function Resources() {
   }, [reload]);
 
   useEffect(() => subscribeAnnouncements(
-    (data) => setAnnouncements(Array.isArray(data) ? data : []),
+    (data) => { setAnnouncements(Array.isArray(data) ? data : []); setAnnouncementError(''); },
     () => setAnnouncementError('Announcements are unavailable right now.'),
   ), []);
 

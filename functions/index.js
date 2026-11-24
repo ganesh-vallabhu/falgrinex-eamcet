@@ -535,8 +535,8 @@ exports.submitQuizAttempt = onCall(async request => {
       const isRetake = !!prevBest;
       const isNewHigh = !prevBest || result.score > prevBest.score;
       const scoreDelta = isNewHigh ? result.score - (prevBest ? prevBest.score : 0) : 0;
-      const testsTakenDelta = isRetake ? 0 : 1;
-      const accuracyDelta = isRetake ? (isNewHigh ? result.accuracy - (prevBest.accuracy || 0) : 0) : result.accuracy;
+      const testsTakenDelta = 1;
+      const accuracyDelta = Number(result.accuracy) || 0;
       const lastActive = profile.lastActiveDate || '';
       let newStreak = profile.streak || 0;
       if (lastActive !== today) {
@@ -585,7 +585,7 @@ exports.submitQuizAttempt = onCall(async request => {
       const storedResult = Object.assign({}, result, { isNewHigh, isRetake, scoreDelta });
       const publicResult = Object.assign({}, storedResult);
       delete publicResult.review;
-      transaction.set(attemptRef, { uid, username, result: storedResult, answers: (request.data || {}).answers || [], createdAt: Date.now() });
+      transaction.set(attemptRef, { uid, studentId: uid, username, result: storedResult, answers: (request.data || {}).answers || [], createdAt: Date.now() });
       transaction.set(resultRef, Object.assign({}, publicResult, {
         studentId: uid,
         studentName: profile.name || 'Student',

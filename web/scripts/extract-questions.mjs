@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import crypto from 'node:crypto';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
-const sourceFile = path.join(root, 'index.html');
+const sourceFile = path.join(root, 'public', 'index.html');
 const webDir = path.join(root, 'web');
 const questionDir = path.join(webDir, 'public', 'questions');
 const catalogFile = path.join(webDir, 'src', 'data', 'catalog.generated.json');

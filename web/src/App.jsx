@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider.jsx';
 import { PageLoader } from './components/Feedback.jsx';
 import AppShell from './components/AppShell.jsx';
+import { useRouteSeo } from './lib/seo.js';
 
 const Landing = lazy(() => import('./pages/Landing.jsx'));
 const Login = lazy(() => import('./pages/Login.jsx'));
@@ -28,6 +29,8 @@ function Protected({ children, adminOnly = false }) {
 }
 
 export default function App() {
+  useRouteSeo();
+  const location = useLocation();
   return (
     <Suspense fallback={<PageLoader label="Loading" />}>
       <Routes>
@@ -40,9 +43,9 @@ export default function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="subjects" element={<Subjects />} />
-          <Route path="practice/:subject/:chapter/:difficulty" element={<QuizRunner mode="practice" />} />
+          <Route path="practice/:subject/:chapter/:difficulty" element={<QuizRunner key={location.pathname} mode="practice" />} />
           <Route path="tests" element={<Tests />} />
-          <Route path="test/:bank/:title" element={<QuizRunner mode="test" />} />
+          <Route path="test/:bank/:title" element={<QuizRunner key={location.pathname} mode="test" />} />
           <Route path="result/:uid/:attemptId" element={<ResultPage />} />
           <Route path="resources" element={<Resources />} />
           <Route path="leaderboard" element={<Leaderboard />} />

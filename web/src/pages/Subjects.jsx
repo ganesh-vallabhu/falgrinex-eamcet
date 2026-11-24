@@ -98,7 +98,7 @@ export default function Subjects() {
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <span className="badge">{count} questions</span>
                               {DIFFICULTIES.map((difficulty) => {
-                                const stats = chapterStatsFor(profile, chapter, difficulty);
+                                const stats = chapterStatsFor(profile, chapter, difficulty, section.subject);
                                 if (stats.best === null || stats.best === undefined) return null;
                                 return (
                                   <span key={difficulty} className="badge border-emerald-400/25 bg-emerald-500/10 text-emerald-300" title={`${stats.attempts} attempt(s) · ${stats.accuracy ?? 0}% accuracy`}>
